@@ -28,7 +28,8 @@
             opacity: 0.5;
         }
 
-        .overlay {
+        /* 画面レイヤー管理 */
+        .screen-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(2, 6, 23, 0.98);
             display: flex; justify-content: center; align-items: center;
@@ -36,16 +37,23 @@
         }
 
         .content-box {
-            max-width: 480px; width: 85%; padding: 2rem;
+            max-width: 480px; width: 85%; padding: 2.5rem;
             border: 1px solid var(--gold); text-align: center;
             background: rgba(15, 23, 42, 0.9);
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.1);
         }
 
+        .content-box h2 { color: var(--gold); letter-spacing: 0.5rem; margin-bottom: 1.5rem; }
+        
         .online-ranking {
             margin: 1rem 0; padding: 0.5rem; border-top: 1px solid rgba(212, 175, 55, 0.3);
             max-height: 180px; overflow-y: auto; font-size: 0.8rem; text-align: left;
         }
         .rank-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        /* チュートリアル用装飾 */
+        .tutorial-text { text-align: left; font-size: 0.85rem; line-height: 1.8; margin: 1.5rem 0; }
+        .tutorial-text li { margin-bottom: 8px; list-style-type: '✦ '; }
 
         /* 三層構造レイアウト */
         .container {
@@ -55,43 +63,27 @@
             width: 90%;
             max-width: 500px;
             height: 600px;
-            display: none;
+            display: none; /* 初期は非表示 */
             flex-direction: column;
             justify-content: space-between;
             padding: 2rem;
             box-sizing: border-box;
+            animation: fadeIn 1s;
         }
 
-        /* 天: ステータス層 */
-        .top-layer {
-            display: flex; justify-content: space-between; align-items: center;
-            height: 100px; border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
+        .top-layer { display: flex; justify-content: space-between; align-items: center; height: 100px; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .life-area { color: var(--safety); font-size: 0.7rem; letter-spacing: 0.1rem; width: 120px; text-align: left;}
         .rank-badge { font-size: 0.6rem; letter-spacing: 0.2rem; color: var(--gold); border: 1px solid var(--gold); padding: 3px 10px; width: 100px; text-align: center;}
         
-        .history-orbit {
-            position: relative; width: 80px; height: 80px;
-            display: flex; justify-content: center; align-items: center;
-        }
-        .history-star {
-            position: absolute; width: 5px; height: 5px; border-radius: 50%;
-            transition: all 0.8s ease; opacity: 0.7; box-shadow: 0 0 8px currentColor;
-        }
+        .history-orbit { position: relative; width: 80px; height: 80px; display: flex; justify-content: center; align-items: center; }
+        .history-star { position: absolute; width: 5px; height: 5px; border-radius: 50%; transition: all 0.8s ease; opacity: 0.7; box-shadow: 0 0 8px currentColor; }
 
-        /* 地: メイン数値層 */
-        .mid-layer {
-            flex-grow: 1; display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-        }
+        .mid-layer { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; }
         .current-streak { font-size: 7rem; font-weight: 100; margin: 0; line-height: 1; }
         .timer-bar-container { width: 120px; height: 2px; background: rgba(255,255,255,0.1); margin-top: 10px; display: none; }
         #timer-bar { width: 100%; height: 100%; background: var(--gold); transition: width 0.1s linear; }
 
-        /* 人: 操作メッセージ層 */
-        .bottom-layer {
-            height: 200px; display: flex; flex-direction: column; justify-content: flex-end;
-        }
+        .bottom-layer { height: 200px; display: flex; flex-direction: column; justify-content: flex-end; }
         .message-area { height: 50px; color: var(--accent); font-style: italic; font-size: 0.85rem; text-align: center; margin-bottom: 10px; }
 
         .btn-group { display: flex; gap: 12px; margin-bottom: 10px; }
@@ -106,19 +98,34 @@
         .special-panel { display: none; border: 1px double var(--gold); padding: 10px; animation: fadeIn 0.5s; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        #result-log { font-size: 0.75rem; min-height: 30px; margin-bottom: 5px; opacity: 0.8; }
+        #result-log { font-size: 0.75rem; min-height: 30px; margin-bottom: 5px; opacity: 0.8; text-align: center;}
     </style>
 </head>
 <body>
 
 <div id="stars"></div>
 
-<div id="intro-overlay" class="overlay">
+<div id="home-screen" class="screen-overlay">
     <div class="content-box">
         <h2>ORACULUM</h2>
         <div id="online-rank-list" class="online-ranking"></div>
-        <p style="font-size:0.7rem; opacity:0.6; margin-bottom:1rem;">― 過去の聖遺録 ―</p>
-        <button style="width:100%; border-color:var(--gold); color:var(--gold);" onclick="startGame()">儀式を始める</button>
+        <p style="font-size:0.7rem; opacity:0.6; margin-bottom:1.5rem;">― 過去の聖遺録 ―</p>
+        <button style="width:100%; border-color:var(--gold); color:var(--gold); padding: 20px;" onclick="showTutorial()">儀式を始める</button>
+    </div>
+</div>
+
+<div id="tutorial-screen" class="screen-overlay" style="display:none;">
+    <div class="content-box">
+        <h2 style="font-size: 1.2rem;">神託の書</h2>
+        <div class="tutorial-text">
+            <ul style="padding-left: 10px;">
+                <li><strong>二択の審判:</strong> 運命を選び続けよ。</li>
+                <li><strong>星々の記憶:</strong> 中央の星の色と位置は過去の正解を示す。アルゴリズムの偏りを読み解け。</li>
+                <li><strong>聖者の賭け:</strong> 3連勝ごとに訪れる1/3の試練。</li>
+                <li><strong>突発の啓示:</strong> 砂時計や双月の加護に備えよ。</li>
+            </ul>
+        </div>
+        <button style="width:100%; border-color:var(--safety); color:var(--safety);" onclick="startGame()">運命を承知した</button>
     </div>
 </div>
 
@@ -196,6 +203,17 @@
         list.innerHTML = scores.map((s, i) => `<div class="rank-row"><span>No.${i+1} ${s.name}</span><span>${s.score} Steps</span></div>`).join('');
     }
 
+    // --- 画面遷移用関数 ---
+    function showTutorial() {
+        document.getElementById('home-screen').style.display = 'none';
+        document.getElementById('tutorial-screen').style.display = 'flex';
+    }
+
+    function startGame() {
+        document.getElementById('tutorial-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+    }
+
     function submitScore() {
         const name = document.getElementById('player-name').value.trim() || "名無き預言者";
         let scores = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -205,11 +223,6 @@
         document.getElementById('name-entry').style.display = 'none';
         document.getElementById('reset-btn').style.display = 'block';
         refreshRanking();
-    }
-
-    function startGame() {
-        document.getElementById('intro-overlay').style.display = 'none';
-        document.getElementById('game-container').style.display = 'flex';
     }
 
     function setupMode(mode) {
