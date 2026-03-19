@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oraculum - 慈悲の審判</title>
+    <style>
+        :root {
+            --deep-blue: #020617;
+            --gold: #d4af37;
+            --silver: #e2e8f0;
+            --accent: #f59e0b;
+            --safety: #34d399;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: 'Times New Roman', serif;
+            background: var(--deep-blue);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0; color: var(--silver); overflow: hidden;
+        }
+
+        #stars {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            opacity: 0.5;
+        }
+
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(2, 6, 23, 0.98);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100;
+        }
+
+        .content-box {
+            max-width: 480px; width: 85%; padding: 2rem;
+            border: 1px solid var(--gold); text-align: center;
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .online-ranking {
+            margin: 1rem 0; padding: 0.5rem; border-top: 1px solid rgba(212, 175, 55, 0.3);
+            max-height: 180px; overflow-y: auto; font-size: 0.8rem; text-align: left;
+        }
+        .rank-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        /* 三層構造レイアウト */
+        .container {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            width: 90%;
+            max-width: 500px;
+            height: 600px;
+            display: none;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        /* 天: ステータス層 */
+        .top-layer {
+            display: flex; justify-content: space-between; align-items: center;
+            height: 100px; border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .life-area { color: var(--safety); font-size: 0.7rem; letter-spacing: 0.1rem; width: 120px; text-align: left;}
+        .rank-badge { font-size: 0.6rem; letter-spacing: 0.2rem; color: var(--gold); border: 1px solid var(--gold); padding: 3px 10px; width: 100px; text-align: center;}
+        
+        .history-orbit {
+            position: relative; width: 80px; height: 80px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .history-star {
+            position: absolute; width: 5px; height: 5px; border-radius: 50%;
+            transition: all 0.8s ease; opacity: 0.7; box-shadow: 0 0 8px currentColor;
+        }
+
+        /* 地: メイン数値層 */
+        .mid-layer {
+            flex-grow: 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        .current-streak { font-size: 7rem; font-weight: 100; margin: 0; line-height: 1; }
+        .timer-bar-container { width: 120px; height: 2px; background: rgba(255,255,255,0.1); margin-top: 10px; display: none; }
+        #timer-bar { width: 100%; height: 100%; background: var(--gold); transition: width 0.1s linear; }
+
+        /* 人: 操作メッセージ層 */
+        .bottom-layer {
+            height: 200px; display: flex; flex-direction: column; justify-content: flex-end;
+        }
+        .message-area { height: 50px; color: var(--accent); font-style: italic; font-size: 0.85rem; text-align: center; margin-bottom: 10px; }
+
+        .btn-group { display: flex; gap: 12px; margin-bottom: 10px; }
+        button {
+            background: transparent; color: var(--silver); border: 1px solid var(--silver);
+            padding: 15px; cursor: pointer; transition: all 0.3s;
+            letter-spacing: 0.1rem; font-family: inherit; flex: 1;
+        }
+        button:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: rgba(212, 175, 55, 0.1); }
+        .hint { border-color: var(--safety) !important; box-shadow: 0 0 15px var(--safety); color: var(--safety) !important; }
+        
+        .special-panel { display: none; border: 1px double var(--gold); padding: 10px; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #result-log { font-size: 0.75rem; min-height: 30px; margin-bottom: 5px; opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+<div id="stars"></div>
+
+<div id="intro-overlay" class="overlay">
+    <div class="content-box">
+        <h2>ORACULUM</h2>
+        <div id="online-rank-list" class="online-ranking"></div>
+        <p style="font-size:0.7rem; opacity:0.6; margin-bottom:1rem;">― 過去の聖遺録 ―</p>
+        <button style="width:100%; border-color:var(--gold); color:var(--gold);" onclick="startGame()">儀式を始める</button>
+    </div>
+</div>
+
+<div class="container" id="game-container">
+    <div class="top-layer">
+        <div id="life" class="life-area">✦ 輝石: 1</div>
+        <div class="history-orbit" id="star-container"></div>
+        <div id="rank" class="rank-badge">PILGRIM</div>
+    </div>
+
+    <div class="mid-layer">
+        <div id="streak" class="current-streak">0</div>
+        <div id="timer-container" class="timer-bar-container"><div id="timer-bar"></div></div>
+    </div>
+
+    <div class="bottom-layer">
+        <div id="result-log"></div>
+        <div id="message" class="message-area">
+            <span id="msg-text">運命を選択してください</span>
+        </div>
+
+        <div id="standard-ui">
+            <div class="btn-group">
+                <button id="btn-0" onclick="play(2, 0)">SINISTER</button>
+                <button id="btn-1" onclick="play(2, 1)">DEXTER</button>
+            </div>
+        </div>
+
+        <div id="quad-ui" style="display:none;">
+            <div class="btn-group">
+                <button onclick="play(4, 0)">I</button><button onclick="play(4, 1)">II</button>
+                <button onclick="play(4, 2)">III</button><button onclick="play(4, 3)">IV</button>
+            </div>
+        </div>
+
+        <div id="branch-ui" class="special-panel">
+            <div class="btn-group">
+                <button onclick="setupMode('normal')">通常の道</button>
+                <button style="border-color:var(--accent); color:var(--accent);" onclick="setupMode('gamble')">聖者の賭け</button>
+            </div>
+        </div>
+
+        <div id="triple-ui" class="special-panel">
+            <div class="btn-group">
+                <button onclick="play(3, 0)">I</button><button onclick="play(3, 1)">II</button><button onclick="play(3, 2)">III</button>
+            </div>
+        </div>
+
+        <div id="name-entry" style="display:none; text-align: center;">
+            <input type="text" id="player-name" placeholder="名を刻む" maxlength="10" style="background:transparent; border:1px solid var(--gold); color:var(--gold); padding:8px; text-align:center; width:60%;">
+            <button onclick="submitScore()" style="flex:none; padding:8px 15px; border-color:var(--gold);">刻印</button>
+        </div>
+        <button id="reset-btn" style="display:none; width:100%; border-color:var(--gold); color:var(--gold);" onclick="location.reload()">再挑戦</button>
+    </div>
+</div>
+
+<script>
+    let streak = 0;
+    let lives = 1; 
+    let isGuiding = false;
+    let timerInterval = null;
+    let currentEvent = null;
+    let history = []; 
+    const STORAGE_KEY = 'oraculum_actual_records';
+
+    window.onload = () => { refreshRanking(); };
+
+    function refreshRanking() {
+        const list = document.getElementById('online-rank-list');
+        const scores = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        if (scores.length === 0) {
+            list.innerHTML = `<div style="text-align:center; opacity:0.3; padding:20px;">まだ聖遺録に刻まれた名はありません。</div>`;
+            return;
+        }
+        list.innerHTML = scores.map((s, i) => `<div class="rank-row"><span>No.${i+1} ${s.name}</span><span>${s.score} Steps</span></div>`).join('');
+    }
+
+    function submitScore() {
+        const name = document.getElementById('player-name').value.trim() || "名無き預言者";
+        let scores = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        scores.push({name: name, score: streak, date: new Date().getTime()});
+        scores.sort((a,b) => b.score - a.score);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(scores.slice(0, 10)));
+        document.getElementById('name-entry').style.display = 'none';
+        document.getElementById('reset-btn').style.display = 'block';
+        refreshRanking();
+    }
+
+    function startGame() {
+        document.getElementById('intro-overlay').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+    }
+
+    function setupMode(mode) {
+        document.getElementById('branch-ui').style.display = 'none';
+        if (mode === 'gamble') { document.getElementById('triple-ui').style.display = 'block'; } 
+        else { document.getElementById('standard-ui').style.display = 'block'; }
+    }
+
+    function play(chance, choiceIndex) {
+        clearInterval(timerInterval);
+        document.getElementById('timer-container').style.display = 'none';
+        
+        let winningNumbers;
+        if (currentEvent === 'double_moon' && chance === 2) {
+            winningNumbers = [0, 1];
+        } else {
+            let bias = Math.random();
+            if (history.length > 0 && bias < 0.2) { 
+                winningNumbers = [history[history.length - 1] % chance];
+            } else if (history.length > 0 && bias < 0.4) {
+                winningNumbers = [(history[history.length - 1] + 1) % chance];
+            } else {
+                winningNumbers = [Math.floor(Math.random() * chance)];
+            }
+        }
+
+        const isWin = winningNumbers.includes(choiceIndex);
+        const correctValue = winningNumbers[0];
+
+        document.getElementById('standard-ui').style.display = 'none';
+        document.getElementById('triple-ui').style.display = 'none';
+        document.getElementById('quad-ui').style.display = 'none';
+        resetEffects();
+
+        if (isWin) {
+            history.push(correctValue);
+            updateHistoryStars();
+            
+            let gain = (chance === 3) ? 2 : (chance === 4 ? 3 : 1);
+            streak += gain;
+            document.getElementById('streak').innerText = streak;
+            if (streak % 5 === 0) isGuiding = true;
+            if (Math.random() < 0.25) { triggerRandomEvent(); } 
+            else if (streak % 3 === 0) { document.getElementById('branch-ui').style.display = 'block'; } 
+            else { showNormalUI(); }
+            document.getElementById('result-log').innerText = "運命は継続を認めた";
+        } else {
+            if (lives > 0) { 
+                lives--; updateLifeDisplay(); showNormalUI(); 
+                document.getElementById('result-log').innerText = "輝石が砕け、命を繋ぎ止めた";
+            } 
+            else { gameOver(); }
+        }
+        updateRank(); currentEvent = null;
+    }
+
+    function updateHistoryStars() {
+        const container = document.getElementById('star-container');
+        container.innerHTML = '';
+        const maxVisible = 3;
+        const recent = history.slice(-maxVisible);
+        recent.forEach((pos, i) => {
+            const star = document.createElement('div');
+            star.className = 'history-star';
+            const angle = (i / maxVisible) * Math.PI * 2;
+            const x = Math.cos(angle) * 35;
+            const y = Math.sin(angle) * 35;
+            star.style.color = pos === 0 ? '#60a5fa' : '#d4af37';
+            star.style.backgroundColor = 'currentColor';
+            star.style.transform = `translate(${x}px, ${y}px)`;
+            container.appendChild(star);
+        });
+    }
+
+    function triggerRandomEvent() {
+        const events = [
+            { name: "流星", action: () => { lives++; updateLifeDisplay(); document.getElementById('msg-text').innerText = "流星が輝石を修復した"; showNormalUI(); }},
+            { name: "双月", action: () => { currentEvent = 'double_moon'; document.getElementById('msg-text').innerText = "双月の加護：全てが正解となる"; showNormalUI(); }},
+            { name: "等価", action: () => { document.getElementById('msg-text').innerText = "等価交換：1/4の試練"; document.getElementById('quad-ui').style.display = 'block'; }},
+            { name: "砂時計", action: () => { startTimer(5); document.getElementById('msg-text').innerText = "刻限の砂時計：5秒以内に選べ"; showNormalUI(); }}
+        ];
+        events[Math.floor(Math.random() * events.length)].action();
+    }
+
+    function startTimer(sec) {
+        const bar = document.getElementById('timer-bar');
+        document.getElementById('timer-container').style.display = 'block';
+        let timeLeft = sec;
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1; bar.style.width = (timeLeft / sec * 100) + "%";
+            if (timeLeft <= 0) { gameOver("刻限が過ぎました。"); }
+        }, 100);
+    }
+
+    function resetEffects() { document.querySelectorAll('button').forEach(b => b.classList.remove('hint')); }
+
+    function showNormalUI() {
+        document.getElementById('standard-ui').style.display = 'block';
+        if (isGuiding) {
+            document.getElementById(`btn-${Math.floor(Math.random()*2)}`).classList.add('hint');
+            isGuiding = false;
+        }
+    }
+
+    function updateLifeDisplay() { document.getElementById('life').innerText = `✦ 輝石: ${lives}`; }
+    function updateRank() { 
+        const r = document.getElementById('rank');
+        if (streak >= 10) r.innerText = "OBSERVER";
+        if (streak >= 20) r.innerText = "ORACLE";
+    }
+
+    function gameOver(reason = "運命の糸が切れました") {
+        clearInterval(timerInterval);
+        document.getElementById('msg-text').innerText = reason;
+        document.getElementById('result-log').innerText = `最終到達: ${streak}`;
+        document.getElementById('name-entry').style.display = 'block';
+        document.getElementById('standard-ui').style.display = 'none';
+        document.getElementById('triple-ui').style.display = 'none';
+        document.getElementById('quad-ui').style.display = 'none';
+        document.getElementById('branch-ui').style.display = 'none';
+    }
+</script>
+</body>
+</html>
