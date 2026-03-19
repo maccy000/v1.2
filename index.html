@@ -19,6 +19,7 @@
             background: var(--deep-blue);
             display: flex; justify-content: center; align-items: center;
             min-height: 100vh; margin: 0; color: var(--silver); overflow: hidden;
+            transition: background 1s ease;
         }
 
         #stars {
@@ -26,9 +27,9 @@
             z-index: -1;
             background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
             opacity: 0.5;
+            transition: background 2s ease;
         }
 
-        /* 画面レイヤー管理 */
         .screen-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(2, 6, 23, 0.98);
@@ -51,11 +52,9 @@
         }
         .rank-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
 
-        /* チュートリアル用装飾 */
         .tutorial-text { text-align: left; font-size: 0.85rem; line-height: 1.8; margin: 1.5rem 0; }
         .tutorial-text li { margin-bottom: 8px; list-style-type: '✦ '; }
 
-        /* 三層構造レイアウト */
         .container {
             background: rgba(15, 23, 42, 0.8);
             backdrop-filter: blur(20px);
@@ -63,7 +62,7 @@
             width: 90%;
             max-width: 500px;
             height: 600px;
-            display: none; /* 初期は非表示 */
+            display: none; 
             flex-direction: column;
             justify-content: space-between;
             padding: 2rem;
@@ -120,9 +119,8 @@
         <div class="tutorial-text">
             <ul style="padding-left: 10px;">
                 <li><strong>二択の審判:</strong> 運命を選び続けよ。</li>
-                <li><strong>星々の記憶:</strong> 中央の星の色と位置は過去の正解を示す。アルゴリズムの偏りを読み解け。</li>
-                <li><strong>聖者の賭け:</strong> 3連勝ごとに訪れる1/3の試練。</li>
-                <li><strong>突発の啓示:</strong> 砂時計や双月の加護に備えよ。</li>
+                <li><strong>星々の記憶:</strong> 中央の星の色と位置は過去の正解を示す。</li>
+                <li><strong>神域への道:</strong> 15の試練を乗り越えれば「神域」に到達する。ただし、終盤の試練は加速する。</li>
             </ul>
         </div>
         <button style="width:100%; border-color:var(--safety); color:var(--safety);" onclick="startGame()">運命を承知した</button>
@@ -137,6 +135,7 @@
     </div>
 
     <div class="mid-layer">
+        <div id="progress-steps" style="display:flex; justify-content:center; gap:6px; margin-bottom: 10px; height: 10px;"></div>
         <div id="streak" class="current-streak">0</div>
         <div id="timer-container" class="timer-bar-container"><div id="timer-bar"></div></div>
     </div>
@@ -174,6 +173,15 @@
             </div>
         </div>
 
+        <div id="clear-ui" class="special-panel" style="border-color: var(--safety);">
+            <h3 style="color: var(--safety); letter-spacing: 0.2rem; margin-top:0;">神域到達</h3>
+            <p style="font-size: 0.8rem;">15の試練を乗り越えた。<br>ここで帰還し名を刻むか、深淵へ進むか。</p>
+            <div class="btn-group">
+                <button onclick="finishClear()" style="border-color:var(--gold); color:var(--gold);">帰還 (クリア)</button>
+                <button onclick="continueAbyss()" style="border-color:var(--error); color:var(--error);">深淵 (続行)</button>
+            </div>
+        </div>
+
         <div id="name-entry" style="display:none; text-align: center;">
             <input type="text" id="player-name" placeholder="名を刻む" maxlength="10" style="background:transparent; border:1px solid var(--gold); color:var(--gold); padding:8px; text-align:center; width:60%;">
             <button onclick="submitScore()" style="flex:none; padding:8px 15px; border-color:var(--gold);">刻印</button>
@@ -189,6 +197,11 @@
     let timerInterval = null;
     let currentEvent = null;
     let history = []; 
+    
+    // 新規追加: クリアフラグとエンドレスモードフラグ
+    let isCleared = false;
+    let isEndless = false;
+    
     const STORAGE_KEY = 'oraculum_actual_records';
 
     window.onload = () => { refreshRanking(); };
@@ -200,10 +213,13 @@
             list.innerHTML = `<div style="text-align:center; opacity:0.3; padding:20px;">まだ聖遺録に刻まれた名はありません。</div>`;
             return;
         }
-        list.innerHTML = scores.map((s, i) => `<div class="rank-row"><span>No.${i+1} ${s.name}</span><span>${s.score} Steps</span></div>`).join('');
+        list.innerHTML = scores.map((s, i) => {
+            // 案3: クリアの証 (称号) の表示
+            let mark = s.cleared ? '<span style="color:var(--safety); font-weight:bold;">[神域]</span> ' : '';
+            return `<div class="rank-row"><span>No.${i+1} ${mark}${s.name}</span><span>${s.score} Steps</span></div>`;
+        }).join('');
     }
 
-    // --- 画面遷移用関数 ---
     function showTutorial() {
         document.getElementById('home-screen').style.display = 'none';
         document.getElementById('tutorial-screen').style.display = 'flex';
@@ -212,12 +228,14 @@
     function startGame() {
         document.getElementById('tutorial-screen').style.display = 'none';
         document.getElementById('game-container').style.display = 'flex';
+        updateProgress();
     }
 
     function submitScore() {
         const name = document.getElementById('player-name').value.trim() || "名無き預言者";
         let scores = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-        scores.push({name: name, score: streak, date: new Date().getTime()});
+        // クリアフラグも保存する
+        scores.push({name: name, score: streak, date: new Date().getTime(), cleared: isCleared});
         scores.sort((a,b) => b.score - a.score);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(scores.slice(0, 10)));
         document.getElementById('name-entry').style.display = 'none';
@@ -229,6 +247,47 @@
         document.getElementById('branch-ui').style.display = 'none';
         if (mode === 'gamble') { document.getElementById('triple-ui').style.display = 'block'; } 
         else { document.getElementById('standard-ui').style.display = 'block'; }
+    }
+
+    // 案1: プログレスバーの更新
+    function updateProgress() {
+        const steps = document.getElementById('progress-steps');
+        if (isEndless) {
+            steps.style.display = 'none'; // 深淵モードでは非表示
+            return;
+        }
+        steps.innerHTML = '';
+        for (let i = 1; i <= 15; i++) {
+            let dot = document.createElement('div');
+            dot.style.width = '8px';
+            dot.style.height = '8px';
+            dot.style.borderRadius = '50%';
+            dot.style.backgroundColor = i <= streak ? 'var(--gold)' : 'rgba(255,255,255,0.2)';
+            dot.style.boxShadow = i <= streak ? '0 0 5px var(--gold)' : 'none';
+            steps.appendChild(dot);
+        }
+    }
+
+    // 案3: クリアして帰還する
+    function finishClear() {
+        document.getElementById('clear-ui').style.display = 'none';
+        isCleared = true;
+        gameOver("神域への到達を果たした");
+    }
+
+    // 案4: エンドレスモードへ突入
+    function continueAbyss() {
+        document.getElementById('clear-ui').style.display = 'none';
+        isCleared = true; // 到達した事実は残る
+        isEndless = true;
+        lives = 1; // 輝石リセット
+        updateLifeDisplay();
+        updateProgress();
+        
+        // 深淵の演出 (背景変化)
+        document.getElementById('stars').style.background = "radial-gradient(circle at center, #3b1e1e 0%, #020617 100%)";
+        document.getElementById('msg-text').innerText = "深淵へ足を踏み入れた...";
+        showNormalUI();
     }
 
     function play(chance, choiceIndex) {
@@ -261,14 +320,41 @@
             history.push(correctValue);
             updateHistoryStars();
             
+            let previousStreak = streak;
             let gain = (chance === 3) ? 2 : (chance === 4 ? 3 : 1);
             streak += gain;
             document.getElementById('streak').innerText = streak;
-            if (streak % 5 === 0) isGuiding = true;
-            if (Math.random() < 0.25) { triggerRandomEvent(); } 
-            else if (streak % 3 === 0) { document.getElementById('branch-ui').style.display = 'block'; } 
-            else { showNormalUI(); }
-            document.getElementById('result-log').innerText = "運命は継続を認めた";
+            updateProgress();
+            
+            // --- 追加統合ロジック ---
+            if (streak >= 15 && previousStreak < 15 && !isEndless) {
+                // 案3＆4: 15歩目到達時の選択
+                document.getElementById('msg-text').innerText = "真理の門が開かれた";
+                document.getElementById('result-log').innerText = "15の試練を突破";
+                document.getElementById('clear-ui').style.display = 'block';
+            } 
+            else if (streak >= 11 && streak < 15 && !isEndless) {
+                // 案2: 終盤 (11〜14) の加速する試練 (確定でイベント発動)
+                document.getElementById('msg-text').innerText = "終盤の試練が加速する...";
+                triggerRandomEvent();
+            } 
+            else {
+                // 通常進行
+                if (streak % 5 === 0) isGuiding = true;
+                
+                // 深淵モード時のさらなる背景変化
+                if (isEndless) {
+                    if (streak >= 25) document.getElementById('stars').style.background = "radial-gradient(circle at center, #5a0000 0%, #000000 100%)";
+                }
+
+                if (Math.random() < 0.25) { triggerRandomEvent(); } 
+                else if (streak % 3 === 0) { document.getElementById('branch-ui').style.display = 'block'; } 
+                else { showNormalUI(); }
+            }
+
+            if (streak < 15 || isEndless) {
+                document.getElementById('result-log').innerText = "運命は継続を認めた";
+            }
         } else {
             if (lives > 0) { 
                 lives--; updateLifeDisplay(); showNormalUI(); 
@@ -343,6 +429,7 @@
         document.getElementById('triple-ui').style.display = 'none';
         document.getElementById('quad-ui').style.display = 'none';
         document.getElementById('branch-ui').style.display = 'none';
+        document.getElementById('clear-ui').style.display = 'none';
     }
 </script>
 </body>
